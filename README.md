@@ -4,8 +4,6 @@ Un proyecto web interactivo de flores amarillas animadas desarrollado con **Next
 
 ## 📸 Vistas del Proyecto
 
-*(Asegúrate de guardar tus imágenes en la misma carpeta que este archivo)*
-
 ### Pantalla Principal
 ![Vista de la página principal](./Captura%20de%20pantalla%202026-09-21%20185008.png)
 
