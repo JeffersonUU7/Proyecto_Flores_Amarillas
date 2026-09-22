@@ -2,6 +2,14 @@
 
 Un proyecto web interactivo de flores amarillas animadas desarrollado con **Next.js**, **React** y **HTML5 Canvas**. Creado por Jefferson para la carrera de Ingeniería en Desarrollo de Software (UNIVO).
 
+## 🌐 Página publicada
+
+Visita la versión desplegada e interactúa con el jardín:
+
+**[Abrir Flores Amarillas](https://proyecto-flores-amarillas-one.vercel.app/)**
+
+En la página, pulsa **Ejecutar Animación** para abrir la experiencia interactiva.
+
 ## 📸 Vistas del Proyecto
 
 ### Pantalla Principal
