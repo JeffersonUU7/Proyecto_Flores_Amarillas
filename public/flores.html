@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flores Amarillas - Jefferson UNIVO</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #09090b; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: crosshair; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #hint {
+    position: fixed; left: 0; right: 0; bottom: max(14px, env(safe-area-inset-bottom));
+    text-align: center; pointer-events: none; opacity: 0; transition: opacity 1.4s;
+    font: 600 13px/1.2 "Trebuchet MS", "Segoe UI", system-ui, sans-serif; letter-spacing: .02em;
+    color: #ffe98a; text-shadow: 0 1px 10px #0d0729, 0 0 3px #0d0729;
+  }
+  #hint.on { opacity: .85; }
+</style>
+</head>
+<body>
+<h1 class="sr">Flores Amarillas - Jefferson UNIVO</h1>
+<canvas id="c" role="img" aria-label="Flores amarillas que forman el mensaje del proyecto"></canvas>
+<p id="hint">Desarrollo de Software - Toca la pantalla</p>
+
+<script>
+(() => {
+'use strict';
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const hint = document.getElementById('hint');
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MOT = RM ? 0 : 1;
+const TAU = Math.PI * 2;
+const GA = 2.399963229728653;
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const easeOutBack = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const toHex = (r, g, b) => '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => { const A = hex(a), B = hex(b); return toHex(lerp(A[0], B[0], t), lerp(A[1], B[1], t), lerp(A[2], B[2], t)); };
+
+const PAL = [
+  ['#ff8f00', '#ffc700', '#fff27a'],
+  ['#ffb300', '#ffe033', '#fffbc4'],
+  ['#e56b00', '#ffae00', '#ffe36b'],
+  ['#ffc21a', '#ffee72', '#fffdf0'],
+  ['#ff9f0a', '#ffd60a', '#fff7a1']
+];
+
+function petal(c, r0, L, W, style, skew) {
+  c.beginPath();
+  c.moveTo(r0, 0);
+  if (style === 'point') {
+    c.bezierCurveTo(r0 + L * .30, -W, r0 + L * .78, -W * .5, r0 + L, skew * W);
+    c.bezierCurveTo(r0 + L * .78, W * .5, r0 + L * .30, W, r0, 0);
+  } else if (style === 'notch') {
+    c.bezierCurveTo(r0 + L * .25, -W * 1.05, r0 + L * .92, -W * 1.0, r0 + L, -W * .45);
+    c.quadraticCurveTo(r0 + L * .9, -W * .1, r0 + L * .9, 0);
+    c.quadraticCurveTo(r0 + L * .9, W * .1, r0 + L, W * .45);
+    c.bezierCurveTo(r0 + L * .92, W * 1.0, r0 + L * .25, W * 1.05, r0, 0);
+  } else {
+    c.bezierCurveTo(r0 + L * .2, -W * 1.15, r0 + L * .9, -W * .95, r0 + L, skew * W);
+    c.bezierCurveTo(r0 + L * .9, W * .95, r0 + L * .2, W * 1.15, r0, 0);
+  }
+  c.closePath();
+}
+
+function makeGene(kind, r, detail) {
+  const pal = PAL[Math.floor(r() * PAL.length)];
+  const [c0, c1, c2] = pal;
+  const stops = t => [mix(c0, '#a63d00', t * .55), mix(c1, '#e08a00', t * .35), mix(c2, c1, t * .55)];
+  const g = { kind, detail, pal, layers: [], center: null, spiral: 0 };
+  const seedsWarm = { c0: '#c85a00', c1: '#ffb400', d1: '#8a3d00', d2: '#ffe066' };
+  if (kind === 'daisy') {
+    const n = 12 + Math.floor(r() * 6);
+    g.layers.push({ n, off: Math.PI / n, r0: .2, len: .88, wid: .14, style: 'round', skew: 0, spin: -.03, stops: stops(.5) });
+    g.layers.push({ n, off: 0, r0: .2, len: .78, wid: .15, style: 'round', skew: 0, spin: .04, stops: stops(0) });
+    g.center = Object.assign({ cr: .2, seeds: true }, seedsWarm);
+  } else if (kind === 'dahlia') {
+    for (let j = 0; j < 4; j++) {
+      const n = 15 - 2 * j;
+      g.layers.push({ n, off: j * Math.PI / n, r0: .13, len: .87 - j * .16, wid: .115 + j * .02, style: 'point', skew: 0, spin: (j % 2 ? -1 : 1) * .03, stops: stops((3 - j) * .16) });
+    }
+    g.center = { cr: .09, seeds: false, c0: '#d96a00', c1: '#ffb000' };
+  } else if (kind === 'sunflower') {
+    g.layers.push({ n: 24, off: 0, r0: .34, len: .66, wid: .085, style: 'point', skew: 0, spin: .02, stops: stops(.4) });
+    g.layers.push({ n: 24, off: Math.PI / 24, r0: .33, len: .58, wid: .09, style: 'point', skew: 0, spin: -.02, stops: stops(0) });
+    g.center = { cr: .4, seeds: true, c0: '#2b1200', c1: '#7a3a08', d1: '#d9941a', d2: '#f7cf55' };
+  } else if (kind === 'cosmos') {
+    g.layers.push({ n: 8, off: 0, r0: .1, len: .9, wid: .36, style: 'notch', skew: 0, spin: .03, stops: stops(.35) });
+    g.layers.push({ n: 8, off: Math.PI / 8, r0: .1, len: .76, wid: .3, style: 'notch', skew: 0, spin: -.03, stops: stops(0) });
+    g.center = Object.assign({ cr: .13, seeds: true }, seedsWarm);
+  } else if (kind === 'mum') {
+    g.layers.push({ n: 36, off: 0, r0: .1, len: .92, wid: .05, style: 'point', skew: 0, spin: .03, stops: stops(.45) });
+    g.layers.push({ n: 30, off: .05, r0: .1, len: .74, wid: .056, style: 'point', skew: 0, spin: -.04, stops: stops(.2) });
+    g.layers.push({ n: 24, off: .1, r0: .08, len: .54, wid: .06, style: 'point', skew: 0, spin: .05, stops: stops(0) });
+    g.center = { cr: .07, seeds: false, c0: '#e07a00', c1: '#ffb000' };
+  } else {
+    g.spiral = detail ? 46 : 28;
+  }
+  return g;
+}
+
+function drawCenter(c, g, R, b) {
+  const ce = g.center; if (!ce) return;
+  const cb = easeOutCubic(clamp(b * 2.2));
+  if (cb <= 0) return;
+  const cr = ce.cr * R * cb;
+  const gr = c.createRadialGradient(0, 0, 0, 0, 0, cr);
+  gr.addColorStop(0, ce.c0); gr.addColorStop(1, ce.c1);
+  c.fillStyle = gr; c.beginPath(); c.arc(0, 0, cr, 0, TAU); c.fill();
+  if (ce.seeds) {
+    const M = g.detail ? 110 : 40;
+    for (let k = 1; k < M; k++) {
+      const rr = cr * .94 * Math.sqrt(k / M), a = k * GA;
+      const s = cr * .075 * (.6 + .7 * k / M);
+      c.fillStyle = k % 3 ? ce.d1 : ce.d2;
+      c.beginPath(); c.arc(Math.cos(a) * rr, Math.sin(a) * rr, s, 0, TAU); c.fill();
+    }
+  }
+}
+
+function drawSpiral(c, g, R, b, T) {
+  const N = g.spiral, [c0, c1, c2] = g.pal;
+  c.lineWidth = g.detail ? Math.max(.5, R * .007) : 1.1;
+  c.strokeStyle = 'rgba(130,55,0,.3)';
+  const rot = T * .06 * MOT;
+  for (let i = N - 1; i >= 0; i--) {
+    const f = i / N;
+    const pb = easeOutCubic(clamp(b * 1.7 - f * .7));
+    if (pb <= 0) continue;
+    const d = R * .58 * Math.sqrt(f) * pb;
+    const L = R * (.12 + .3 * f) * pb, W = L * .55;
+    c.fillStyle = f < .5 ? mix(c0, c1, f * 2) : mix(c1, c2, (f - .5) * 2);
+    c.save();
+    c.rotate(i * GA + rot + (1 - pb) * .8);
+    petal(c, d, L, W, 'round', .25);
+    c.fill(); c.stroke();
+    c.restore();
+  }
+}
+
+function drawFlower(c, g, R, b, T) {
+  if (b <= 0) return;
+  if (g.spiral) { drawSpiral(c, g, R, b, T); return; }
+  c.lineWidth = g.detail ? Math.max(.6, R * .008) : 1.1;
+  c.strokeStyle = 'rgba(120,50,0,.28)';
+  for (let j = 0; j < g.layers.length; j++) {
+    const L = g.layers[j];
+    const lb = easeOutCubic(clamp(b * 1.5 - j * .16));
+    if (lb <= 0) continue;
+    const r0 = L.r0 * R, len = L.len * R * lb, W = L.wid * R * (.5 + .5 * lb);
+    const gr = c.createRadialGradient(0, 0, r0, 0, 0, r0 + len);
+    gr.addColorStop(0, L.stops[0]); gr.addColorStop(.5, L.stops[1]); gr.addColorStop(1, L.stops[2]);
+    c.fillStyle = gr;
+    c.save();
+    c.rotate(L.off + T * L.spin * MOT + (1 - lb) * .9);
+    const step = TAU / L.n;
+    for (let k = 0; k < L.n; k++) {
+      petal(c, r0, len, W, L.style, L.skew);
+      c.fill(); c.stroke();
+      if (g.detail && L.style !== 'point') {
+        c.beginPath(); c.moveTo(r0 + len * .12, 0); c.lineTo(r0 + len * .72, 0);
+        c.strokeStyle = 'rgba(150,70,0,.2)'; c.stroke(); c.strokeStyle = 'rgba(120,50,0,.28)';
+      }
+      c.rotate(step);
+    }
+    c.restore();
+  }
+  drawCenter(c, g, R, b);
+}
+
+let W = 0, H = 0, dpr = 1, T = RM ? 20 : 0;
+let bg, hillA, hillB, vig;
+let back = [], mid = [], front = [], planted = [], textItems = [], sprites = [];
+let SPR_S = 40, SPR_R = 38;
+let px = -9999, py = -9999, hr = 110;
+const pollen = [];
+
+const STY = {
+  back:  { stem: ['#155a55', '#2a8f80'], leaf: ['#1a6f67', '#2d9c8b'], glow: .10 },
+  mid:   { stem: ['#127a58', '#37b884'], leaf: ['#1b8a5f', '#3bc98c'], glow: .16 },
+  front: { stem: ['#0f7452', '#3fcf90'], leaf: ['#178a5c', '#46d99a'], glow: .22 }
+};
+
+const glow = document.createElement('canvas');
+glow.width = glow.height = 64;
+{
+  const x = glow.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,244,170,1)'); g.addColorStop(.25, 'rgba(255,214,60,.55)'); g.addColorStop(1, 'rgba(255,190,30,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+}
+
+function layerCanvas() {
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+  const x = c.getContext('2d'); x.scale(dpr, dpr);
+  return [c, x];
+}
+
+function mkPlant(o) {
+  const r = rng(o.seed), st = o.style;
+  const gene = makeGene(o.kind, r, true);
+  const nl = 2 + Math.floor(r() * 3), leaves = [];
+  for (let i = 0; i < nl; i++) {
+    leaves.push({ t: .2 + .5 * (i + r() * .6) / nl, side: (i + Math.floor(r() * 2)) % 2 ? 1 : -1, len: o.R * (.7 + r() * .6), col: st.leaf[0], col2: st.leaf[1] });
+  }
+  return {
+    bx: o.tx + (r() - .5) * W * .1, by: H + 40, tx: o.tx, ty: o.ty, R: o.R, gene,
+    t0: o.t0, dur1: 1.5, dur2: 1.7, bend: (r() - .5) * W * .14,
+    ph: r() * TAU, sp: .5 + r() * .4, sway: o.R * (.1 + r() * .08),
+    rot: (r() - .5) * .5, tilt: .8 + r() * .2, sw0: Math.max(2.2, o.R * .075),
+    st, leaves, glow: st.glow, pl: !!o.pl, born: o.born || 0
+  };
+}
+
+function drawPlant(f) {
+  const tt = T - f.t0; if (tt <= 0) return;
+  const g = easeOutCubic(clamp(tt / f.dur1));
+  const p = clamp((tt - f.dur1 * .78) / f.dur2);
+  const sx = Math.sin(T * f.sp + f.ph) * f.sway * MOT, sy = Math.cos(T * f.sp * .8 + f.ph) * f.sway * .25 * MOT;
+  const hx = f.tx + sx, hy = f.ty + sy;
+  const P0x = f.bx, P0y = f.by;
+  const P1x = lerp(f.bx, hx, .35) + f.bend + sx * .5, P1y = lerp(f.by, hy, .55);
+  const B = t => { const u = 1 - t; return [u * u * P0x + 2 * u * t * P1x + t * t * hx, u * u * P0y + 2 * u * t * P1y + t * t * hy]; };
+  const D = t => { const u = 1 - t; return [2 * u * (P1x - P0x) + 2 * t * (hx - P1x), 2 * u * (P1y - P0y) + 2 * t * (hy - P1y)]; };
+
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  const N = 26;
+  for (let k = 0; k <= N; k++) { const q = B(g * k / N); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+  ctx.strokeStyle = f.st.stem[0]; ctx.lineWidth = f.sw0; ctx.stroke();
+  ctx.strokeStyle = f.st.stem[1]; ctx.globalAlpha = .55; ctx.lineWidth = f.sw0 * .38; ctx.stroke(); ctx.globalAlpha = 1;
+
+  for (const lf of f.leaves) {
+    if (g <= lf.t) continue;
+    const lg = easeOutCubic(clamp((g - lf.t) * 3.5));
+    const q = B(lf.t), d = D(lf.t);
+    const ang = Math.atan2(d[1], d[0]) + lf.side * .95 + Math.sin(T * f.sp * 1.3 + lf.t * 5) * .06 * MOT;
+    const Ln = lf.len * lg, Wd = Ln * .32;
+    ctx.save(); ctx.translate(q[0], q[1]); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(Ln * .45, -Wd * 1.2, Ln, 0); ctx.quadraticCurveTo(Ln * .45, Wd * 1.2, 0, 0);
+    ctx.fillStyle = lf.col; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(Ln * .45, -Wd * 1.2, Ln, 0); ctx.closePath();
+    ctx.fillStyle = lf.col2; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Ln * .9, 0);
+    ctx.strokeStyle = 'rgba(8,70,50,.55)'; ctx.lineWidth = Math.max(1, Ln * .02); ctx.stroke();
+    ctx.restore();
+  }
+
+  const e = B(g), de = D(g);
+  const headAng = Math.atan2(de[1], de[0]) + Math.PI / 2;
+  if (p < .35) {
+    ctx.fillStyle = '#9be564';
+    ctx.beginPath(); ctx.arc(e[0], e[1], f.R * .12 * (1 - p / .35) + 1.5, 0, TAU); ctx.fill();
+  }
+  if (p > 0) {
+    if (f.glow) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const rg = ctx.createRadialGradient(e[0], e[1], 0, e[0], e[1], f.R * 2.1);
+      rg.addColorStop(0, 'rgba(255,200,30,' + (f.glow * p).toFixed(3) + ')'); rg.addColorStop(1, 'rgba(255,200,30,0)');
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(e[0], e[1], f.R * 2.1, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(e[0], e[1]);
+    ctx.rotate(f.rot + headAng * .5 + sx / f.R * .25);
+    ctx.scale(1, f.tilt);
+    const sc = Math.max(.001, easeOutBack(p));
+    ctx.scale(sc, sc);
+    drawFlower(ctx, f.gene, f.R, p, T);
+    ctx.restore();
+  }
+}
+
+let textBox = { cx: 0, cy: 0, w: 0, h: 0 };
+
+function buildSprites(maxR) {
+  sprites = [];
+  SPR_S = clamp(Math.ceil(maxR * dpr * 1.1), 20, 72);
+  SPR_R = SPR_S * .95;
+  const r = rng(777);
+  const kinds = ['daisy', 'cosmos', 'dahlia', 'mum', 'spiral', 'daisy', 'spiral', 'cosmos', 'dahlia', 'spiral'];
+  for (const k of kinds) {
+    const c = document.createElement('canvas'); c.width = c.height = SPR_S * 2;
+    const x = c.getContext('2d'); x.translate(SPR_S, SPR_S);
+    drawFlower(x, makeGene(k, r, false), SPR_R, 1, 0);
+    sprites.push(c);
+  }
+}
+
+function buildText(off) {
+  const r = rng(99);
+  const portrait = W < H * .85 && W < 700;
+  // AQUI CAMBIAMOS EL MENSAJE QUE DIBUJAN LAS FLORES
+  const lines = portrait ? [['Proyecto de', 0.8], ['Jefferson', 1.2], ['UNIVO', 1.5]] : [['Proyecto de', 1], ['Jefferson', 1.28]];
+  const fam = '"Arial Rounded MT Bold","Nunito","Trebuchet MS","Segoe UI",system-ui,sans-serif';
+  const o = document.createElement('canvas'); o.width = W; o.height = H;
+  const x = o.getContext('2d', { willReadFrequently: true });
+  x.font = '900 100px ' + fam;
+  const widths = lines.map(l => x.measureText(l[0]).width * l[1]);
+  const maxW = W * (portrait ? .9 : .8), maxH = H * (portrait ? .42 : .42);
+  const unit = lines.reduce((a, l) => a + l[1] * .92, 0) + (lines.length - 1) * .1;
+  const f = Math.min(100 * maxW / Math.max(...widths), maxH / unit);
+  const blockH = f * unit;
+  const cy = H * (portrait ? .26 : .29);
+  let y = cy - blockH / 2;
+  const boxes = [];
+  x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  lines.forEach((l, i) => {
+    const fs = f * l[1], lh = fs * .92;
+    x.font = '900 ' + fs + 'px ' + fam;
+    x.fillText(l[0], W / 2, y + lh / 2 - fs * .03);
+    const w = x.measureText(l[0]).width;
+    boxes.push({ y0: y, y1: y + lh + f * .05, x0: W / 2 - w / 2, x1: W / 2 + w / 2 });
+    y += lh + f * .1;
+  });
+  textBox = { cx: W / 2, cy, w: Math.max(...widths) * f / 100, h: blockH };
+
+  const img = x.getImageData(0, 0, W, H).data;
+  const s = Math.max(7, f / 10.5);
+  textItems = [];
+  const rows = Math.ceil(H / (s * .866));
+  for (let ry = 0; ry < rows; ry++) {
+    const yy = ry * s * .866, xo = (ry & 1) ? s / 2 : 0;
+    for (let xx = xo; xx < W; xx += s) {
+      const jx = xx + (r() - .5) * s * .25, jy = yy + (r() - .5) * s * .25;
+      const ix = jx | 0, iy = jy | 0;
+      if (ix < 0 || iy < 0 || ix >= W || iy >= H) continue;
+      if (img[(iy * W + ix) * 4 + 3] < 140) continue;
+      let li = boxes.findIndex(b => jy >= b.y0 && jy < b.y1); if (li < 0) li = boxes.length - 1;
+      const b = boxes[li];
+      const d = off < 0 ? off : .8 + li * .85 + clamp((jx - b.x0) / Math.max(1, b.x1 - b.x0)) * 1.5 + r() * .4;
+      textItems.push({ x: jx, y: jy, r: s * (.55 + .3 * r()), spr: Math.floor(r() * 10), rot: r() * TAU, d, ph: r() * TAU, hot: 0 });
+    }
+  }
+  textItems.sort((a, b) => a.y - b.y);
+  buildSprites(s * .85);
+}
+
+function makeHill(y0, amp, freq, phase, c0, c1) {
+  const [c, x] = layerCanvas();
+  const line = i => y0 + Math.sin(i * freq + phase) * amp + Math.sin(i * freq * 2.3 + phase * 1.7) * amp * .4;
+  x.beginPath(); x.moveTo(0, H);
+  for (let i = 0; i <= W + 6; i += 6) x.lineTo(i, line(i));
+  x.lineTo(W + 6, H); x.closePath();
+  const g = x.createLinearGradient(0, y0 - amp, 0, H);
+  g.addColorStop(0, c0); g.addColorStop(1, c1);
+  x.fillStyle = g; x.fill();
+  x.beginPath();
+  for (let i = 0; i <= W + 6; i += 6) i ? x.lineTo(i, line(i)) : x.moveTo(i, line(i));
+  x.strokeStyle = 'rgba(255,215,90,.16)'; x.lineWidth = 1.5; x.stroke();
+  return c;
+}
+
+function buildBackgrounds() {
+  {
+    const [c, x] = layerCanvas(); bg = c;
+    const g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#09090b'); g.addColorStop(.42, '#18181b'); g.addColorStop(.78, '#27272a'); g.addColorStop(1, '#3f3f46');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    const gl = x.createRadialGradient(textBox.cx, textBox.cy, 0, textBox.cx, textBox.cy, Math.max(W, H) * .55);
+    gl.addColorStop(0, 'rgba(250,204,21,.15)'); gl.addColorStop(.5, 'rgba(250,204,21,.05)'); gl.addColorStop(1, 'rgba(250,204,21,0)');
+    x.fillStyle = gl; x.fillRect(0, 0, W, H);
+    const r = rng(42);
+    const ns = Math.round(W * H / 9000);
+    for (let i = 0; i < ns; i++) {
+      const sx = r() * W, sy = r() * H * .7, s = .4 + r() * 1.1;
+      x.globalAlpha = .25 + r() * .6; x.fillStyle = r() < .2 ? '#fef08a' : '#f4f4f5';
+      x.beginPath(); x.arc(sx, sy, s, 0, TAU); x.fill();
+    }
+    x.globalAlpha = .8; x.strokeStyle = '#fef08a'; x.lineWidth = 1;
+    for (let i = 0; i < 7; i++) {
+      const sx = r() * W, sy = r() * H * .55, s = 4 + r() * 5;
+      x.beginPath(); x.moveTo(sx - s, sy); x.lineTo(sx + s, sy); x.moveTo(sx, sy - s); x.lineTo(sx, sy + s); x.stroke();
+    }
+    x.globalAlpha = 1;
+  }
+  hillA = makeHill(H * .80, H * .03, .006, 1.3, '#18181b', '#09090b');
+  hillB = makeHill(H * .93, H * .018, .009, 4.1, '#09090b', '#000000');
+  {
+    const [c, x] = layerCanvas(); vig = c;
+    const g = x.createRadialGradient(W / 2, H * .5, Math.min(W, H) * .35, W / 2, H * .5, Math.hypot(W, H) * .62);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.6)');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+  }
+}
+
+function buildGarden(off) {
+  const r = rng(2024), m = Math.min(W, H);
+  back = []; mid = []; front = [];
+  const spec = [
+    { arr: back,  n: clamp(Math.round(W / 170), 4, 10), rMin: .045, rMax: .075, yMin: .58, yMax: .78, kinds: ['spiral', 'mum', 'daisy', 'spiral', 'cosmos'],    st: STY.back,  t: [.3, 2.4] },
+    { arr: mid,   n: clamp(Math.round(W / 230), 3, 7),  rMin: .07,  rMax: .10,  yMin: .70, yMax: .86, kinds: ['dahlia', 'spiral', 'cosmos', 'sunflower', 'daisy'], st: STY.mid,   t: [.6, 2.6] },
+    { arr: front, n: clamp(Math.round(W / 330), 3, 5),  rMin: .10,  rMax: .16,  yMin: .78, yMax: .93, kinds: ['sunflower', 'spiral', 'dahlia', 'cosmos', 'mum'], st: STY.front, t: [.9, 2.8] }
+  ];
+  for (const s of spec) {
+    const start = Math.floor(r() * s.kinds.length);
+    for (let i = 0; i < s.n; i++) {
+      const tx = (i + .5 + (r() - .5) * .5) / s.n * W;
+      const ty = H * lerp(s.yMin, s.yMax, r());
+      const R = m * lerp(s.rMin, s.rMax, r());
+      s.arr.push(mkPlant({
+        tx, ty, R, seed: (r() * 1e9) | 0, kind: s.kinds[(start + i) % s.kinds.length],
+        t0: off < 0 ? off : lerp(s.t[0], s.t[1], r()), style: s.st
+      }));
+    }
+    s.arr.sort((a, b) => a.ty - b.ty);
+  }
+  planted.forEach((p, i) => {
+    front.push(mkPlant({ tx: p.nx * W, ty: p.ny * H, R: p.rr * m, seed: p.seed, kind: p.kind, t0: -30, style: STY.front, pl: true, born: -100 + i }));
+  });
+  front.sort((a, b) => a.ty - b.ty);
+}
+
+function initPollen() {
+  pollen.length = 0;
+  const n = Math.round(clamp(W * H / 26000, 24, 70));
+  for (let i = 0; i < n; i++) {
+    pollen.push({ x: Math.random() * W, y: Math.random() * H, vy: 6 + Math.random() * 14, s: 3 + Math.random() * 7, ph: Math.random() * TAU, amb: true });
+  }
+}
+
+function build() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const off = T > 6.5 ? -30 : 0;
+  hr = W < 700 ? 70 : 110;
+  buildText(off);
+  buildBackgrounds();
+  buildGarden(off);
+  initPollen();
+}
+
+const KINDS = ['daisy', 'dahlia', 'sunflower', 'cosmos', 'mum', 'spiral', 'spiral'];
+function plant(x, y) {
+  const m = Math.min(W, H);
+  const p = { nx: x / W, ny: clamp(y / H, .12, .97), rr: lerp(.06, .11, Math.random()), seed: (Math.random() * 1e9) | 0, kind: KINDS[Math.floor(Math.random() * KINDS.length)] };
+  planted.push(p);
+  front.push(mkPlant({ tx: x, ty: p.ny * H, R: p.rr * m, seed: p.seed, kind: p.kind, t0: T, style: STY.front, pl: true, born: T }));
+  if (planted.length > 28) {
+    planted.shift();
+    let k = -1, b = 1e9;
+    front.forEach((f, i) => { if (f.pl && f.born < b) { b = f.born; k = i; } });
+    if (k >= 0) front.splice(k, 1);
+  }
+  front.sort((a, b) => a.ty - b.ty);
+  for (let i = 0; i < 10 && !RM; i++) spawnPollen(x, y, 1);
+}
+
+function spawnPollen(x, y, k) {
+  if (RM || pollen.length > 260) return;
+  const a = Math.random() * TAU, sp = 10 + Math.random() * 40 * k;
+  pollen.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 10, s: 2 + Math.random() * 5, life: 0, max: 1.2 + Math.random() * 1.6, amb: false });
+}
+
+let hintGone = false;
+function killHint() { hintGone = true; hint.classList.remove('on'); }
+let touchTimer;
+cv.addEventListener('pointermove', e => {
+  px = e.clientX; py = e.clientY;
+  if (e.pointerType !== 'touch' && Math.random() < .5) spawnPollen(px, py, .5);
+});
+cv.addEventListener('pointerleave', () => { px = py = -9999; });
+cv.addEventListener('pointerdown', e => {
+  px = e.clientX; py = e.clientY;
+  plant(e.clientX, e.clientY); killHint();
+});
+cv.addEventListener('pointerup', e => {
+  if (e.pointerType === 'touch') { clearTimeout(touchTimer); touchTimer = setTimeout(() => { px = py = -9999; }, 500); }
+});
+let rt;
+window.addEventListener('resize', () => {
+  clearTimeout(rt);
+  rt = setTimeout(() => {
+    if (Math.abs(window.innerWidth - W) > 1 || Math.abs(window.innerHeight - H) > H * .12) build();
+  }, 150);
+});
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  T += dt;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(bg, 0, 0, W, H);
+
+  for (const f of back) drawPlant(f);
+  ctx.fillStyle = 'rgba(9,9,11,.4)'; ctx.fillRect(0, 0, W, H);
+
+  for (const it of textItems) {
+    const p = clamp((T - it.d) / 1.1);
+    if (p <= 0) continue;
+    const dx = it.x - px, dy = it.y - py, d2 = dx * dx + dy * dy;
+    const target = d2 < hr * hr ? 1 - Math.sqrt(d2) / hr : 0;
+    it.hot += (target - it.hot) * .15;
+    const sc = easeOutBack(p) * (1 + it.hot * .55) * (1 + .05 * Math.sin(T * 1.6 + it.ph) * MOT);
+    const k = it.r / SPR_R * sc * dpr;
+    const rot = it.rot - (1 - p) * 2.2 + it.hot * .6 + Math.sin(T * .5 + it.ph) * .08 * MOT;
+    const cs = Math.cos(rot) * k, sn = Math.sin(rot) * k;
+    ctx.setTransform(cs, sn, -sn, cs, it.x * dpr, it.y * dpr);
+    ctx.drawImage(sprites[it.spr], -SPR_S, -SPR_S);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  ctx.drawImage(hillA, 0, 0, W, H);
+  for (const f of mid) drawPlant(f);
+  ctx.drawImage(hillB, 0, 0, W, H);
+  for (const f of front) drawPlant(f);
+
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = pollen.length - 1; i >= 0; i--) {
+    const q = pollen[i]; let a;
+    if (q.amb) {
+      q.y -= q.vy * dt * MOT; q.x += Math.sin(T * .6 + q.ph) * 8 * dt * MOT;
+      if (q.y < -12) { q.y = H + 12; q.x = Math.random() * W; }
+      a = clamp(.3 + .3 * Math.sin(T * 1.3 + q.ph), .05, 1);
+    } else {
+      q.life += dt;
+      if (q.life >= q.max) { pollen.splice(i, 1); continue; }
+      q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= .97; q.vy = q.vy * .97 - 6 * dt;
+      a = 1 - q.life / q.max;
+    }
+    ctx.globalAlpha = a;
+    ctx.drawImage(glow, q.x - q.s, q.y - q.s, q.s * 2, q.s * 2);
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.drawImage(vig, 0, 0, W, H);
+  requestAnimationFrame(frame);
+}
+
+build();
+setTimeout(() => { if (!hintGone) hint.classList.add('on'); }, RM ? 300 : 5200);
+setTimeout(() => hint.classList.remove('on'), 16000);
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
