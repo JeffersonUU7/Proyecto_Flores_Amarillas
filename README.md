@@ -13,10 +13,10 @@ En la página, pulsa **Ejecutar Animación** para abrir la experiencia interacti
 ## 📸 Vistas del Proyecto
 
 ### Pantalla Principal
-![Vista de la página principal](./Captura%20de%20pantalla%202026-09-21%20185008.png)
+![Vista de la página principal](./imagenes/Captura%20de%20pantalla%202026-09-21%20185008.png)
 
 ### Animación Interactiva (Canvas)
-![Vista de la animación ejecutándose](./Captura%20de%20pantalla%202026-09-21%20185125.png)
+![Vista de la animación ejecutándose](./imagenes/Captura%20de%20pantalla%202026-09-21%20185125.png)
 
 ---
 
