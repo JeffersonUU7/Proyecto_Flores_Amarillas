@@ -124,6 +124,41 @@ p {
   box-shadow: 0 6px 25px rgba(250, 204, 21, 0.4);
 }
 
+.btn-secondary {
+  background: transparent;
+  color: #facc15;
+  border: 1px solid #ca8a04;
+  padding: 14px 32px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.btn-secondary:hover {
+  background: rgba(250, 204, 21, 0.1);
+  transform: translateY(-3px);
+}
+
+.dedication {
+  max-width: 680px;
+  margin: 28px auto 0;
+  padding: 20px 28px;
+  color: #fef3c7;
+  border-left: 3px solid #facc15;
+  border-right: 3px solid #facc15;
+  line-height: 1.7;
+  animation: aparecerDedicatoria 0.5s ease-out;
+}
+
+@keyframes aparecerDedicatoria {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .canvas-container {
   margin-top: 40px;
   width: 100%;
